@@ -1,0 +1,75 @@
+export default [
+  {
+    name: "Science",
+    class: "10",
+    chapters: [
+      {
+        name: "Chemical Reactions and Equations",
+        topics: ["Balancing", "Types"],
+      },
+      { name: "Acids Bases and Salts", topics: ["pH", "Neutralization"] },
+      { name: "Metals and Non-metals", topics: ["Reactivity", "Properties"] },
+      { name: "Carbon and its Compounds", topics: ["Covalent bonds"] },
+      { name: "Periodic Classification of Elements", topics: ["Modern table"] },
+      { name: "Life Processes", topics: ["Nutrition", "Respiration"] },
+      { name: "Control and Coordination", topics: ["Nervous system"] },
+      { name: "How do Organisms Reproduce", topics: ["Asexual", "Sexual"] },
+      { name: "Heredity and Evolution", topics: ["Genes"] },
+      { name: "Light – Reflection and Refraction", topics: ["Mirror", "Lens"] },
+      { name: "Human Eye and Colourful World", topics: ["Defects"] },
+      { name: "Electricity", topics: ["Ohm's Law"] },
+      { name: "Magnetic Effects of Electric Current", topics: ["Motor"] },
+      { name: "Sources of Energy", topics: ["Renewable"] },
+      { name: "Our Environment", topics: ["Ecosystem"] },
+      { name: "Management of Natural Resources", topics: ["Conservation"] },
+    ],
+  },
+
+  {
+    name: "Mathematics",
+    class: "10",
+    chapters: [
+      { name: "Real Numbers", topics: ["HCF", "LCM"] },
+      { name: "Polynomials", topics: ["Zeros"] },
+      { name: "Pair of Linear Equations", topics: ["Graph"] },
+      { name: "Quadratic Equations", topics: ["Roots"] },
+      { name: "Arithmetic Progressions", topics: ["Sum"] },
+      { name: "Triangles", topics: ["Similarity"] },
+      { name: "Coordinate Geometry", topics: ["Distance"] },
+      { name: "Trigonometry", topics: ["Identities"] },
+      { name: "Applications of Trigonometry", topics: ["Heights"] },
+      { name: "Circles", topics: ["Tangents"] },
+      { name: "Areas Related to Circles", topics: ["Sector"] },
+      { name: "Surface Areas and Volumes", topics: ["Cone"] },
+      { name: "Statistics", topics: ["Mean"] },
+      { name: "Probability", topics: ["Basic"] },
+    ],
+  },
+
+  {
+    name: "Social Science",
+    class: "10",
+    chapters: [
+      { name: "Nationalism in India", topics: ["Freedom movement"] },
+      { name: "Resources and Development", topics: ["Soil"] },
+      { name: "Water Resources", topics: ["Dams"] },
+      { name: "Agriculture", topics: ["Crops"] },
+      { name: "Power Sharing", topics: ["Democracy"] },
+      { name: "Federalism", topics: ["States"] },
+      { name: "Development", topics: ["Income"] },
+      { name: "Globalisation", topics: ["Trade"] },
+    ],
+  },
+
+  {
+    name: "English",
+    class: "10",
+    chapters: [
+      { name: "A Letter to God" },
+      { name: "Nelson Mandela" },
+      { name: "Two Stories About Flying" },
+      { name: "Anne Frank" },
+      { name: "The Thief’s Story" },
+    ],
+  },
+];
