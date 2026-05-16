@@ -7,6 +7,7 @@ import quizRoutes from "./routes/quiz.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import syllabusRoutes from "./routes/syllabus.js";
 import errorHandler from "./middleware/errorHandler.js";
+import paymentRoutes from "./routes/payment.js";
 
 const app = express();
 
@@ -19,7 +20,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/syllabus", syllabusRoutes);
-
+app.use("/api/payment", paymentRoutes);
 app.use(errorHandler);
 
 export default app;

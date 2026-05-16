@@ -1,5 +1,7 @@
 import QuestionBank from "../models/QuestionBank.js";
+
 import Result from "../models/Result.js";
+
 import BookContent from "../models/BookContent.js";
 
 import { generateAIQuiz } from "../services/aiService.js";
@@ -16,6 +18,13 @@ export const generateQuiz = async (req, res) => {
   const { subject, chapter } = req.body;
 
   try {
+    console.log("REQ USER:", req.user);
+
+    // ✅ INCREMENT QUIZ COUNT
+    req.user.quizCountToday += 1;
+
+    await req.user.save();
+
     const normalizedSubject = normalize(subject);
 
     const normalizedChapter = normalize(chapter);
@@ -32,16 +41,30 @@ export const generateQuiz = async (req, res) => {
       chapter: normalizedChapter,
     });
 
-    // ✅ RETURN RANDOM EXISTING VARIANT
+    // ✅ RETURN RANDOM EXISTING
     if (data && data.variants.length > 0) {
       const random = Math.floor(Math.random() * data.variants.length);
 
-      return res.json(data.variants[random].questions);
+      return res.json({
+        questions: data.variants[random].questions,
+
+        user: {
+          id: req.user._id,
+
+          name: req.user.name,
+
+          email: req.user.email,
+
+          plan: req.user.plan,
+
+          quizCountToday: req.user.quizCountToday,
+        },
+      });
     }
 
     console.log("🚀 Generating first quiz variant...");
 
-    // ✅ FETCH NCERT CONTENT
+    // ✅ FETCH NCERT
     const chapterData = await BookContent.findOne({
       subject: normalizedSubject,
 
@@ -54,11 +77,14 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // ✅ GENERATE FIRST VARIANT
+    // ✅ GENERATE QUIZ
     const questions = await generateAIQuiz(
       normalizedSubject,
+
       normalizedChapter,
+
       chapterData.content,
+
       20,
     );
 
@@ -68,7 +94,7 @@ export const generateQuiz = async (req, res) => {
       },
     ];
 
-    // ✅ SAVE INITIAL VARIANT
+    // ✅ SAVE DB
     data = await QuestionBank.create({
       subject: normalizedSubject,
 
@@ -77,13 +103,29 @@ export const generateQuiz = async (req, res) => {
       variants,
     });
 
-    // ✅ SEND QUIZ IMMEDIATELY
-    res.json(questions);
+    // ✅ SEND RESPONSE
+    res.json({
+      questions,
 
-    // 🔥 GENERATE REMAINING VARIANTS
+      user: {
+        id: req.user._id,
+
+        name: req.user.name,
+
+        email: req.user.email,
+
+        plan: req.user.plan,
+
+        quizCountToday: req.user.quizCountToday,
+      },
+    });
+
+    // 🔥 BACKGROUND VARIANTS
     generateRemainingVariants(
       normalizedSubject,
+
       normalizedChapter,
+
       chapterData.content,
     );
   } catch (err) {
@@ -96,7 +138,13 @@ export const generateQuiz = async (req, res) => {
 };
 
 // 🔥 BACKGROUND VARIANTS
-async function generateRemainingVariants(subject, chapter, chapterContent) {
+async function generateRemainingVariants(
+  subject,
+
+  chapter,
+
+  chapterContent,
+) {
   try {
     console.log("⚡ Generating background variants...");
 
@@ -104,7 +152,7 @@ async function generateRemainingVariants(subject, chapter, chapterContent) {
 
     for (let i = 0; i < 2; i++) {
       try {
-        // ✅ WAIT BEFORE NEXT CALL
+        // ✅ WAIT
         if (i > 0) {
           console.log("⏳ Waiting before next variant...");
 
@@ -113,8 +161,11 @@ async function generateRemainingVariants(subject, chapter, chapterContent) {
 
         const questions = await generateAIQuiz(
           subject,
+
           chapter,
+
           chapterContent,
+
           20,
         );
 
@@ -134,6 +185,7 @@ async function generateRemainingVariants(subject, chapter, chapterContent) {
         subject,
         chapter,
       },
+
       {
         $push: {
           variants: {
@@ -152,7 +204,17 @@ async function generateRemainingVariants(subject, chapter, chapterContent) {
 // 🔥 SUBMIT QUIZ
 export const submitQuiz = async (req, res) => {
   try {
-    const { userId, subject, chapter, quiz, answers } = req.body;
+    const {
+      userId,
+
+      subject,
+
+      chapter,
+
+      quiz,
+
+      answers,
+    } = req.body;
 
     let score = 0;
 
@@ -176,6 +238,7 @@ export const submitQuiz = async (req, res) => {
 
     res.json({
       score,
+
       total: quiz.length,
     });
   } catch (err) {
