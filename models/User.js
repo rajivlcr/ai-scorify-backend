@@ -22,7 +22,7 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
 
-    // 🚀 FREEMIUM
+    // 🚀 PLAN
     plan: {
       type: String,
 
@@ -31,14 +31,13 @@ const userSchema = new mongoose.Schema(
       default: "free",
     },
 
-    // 🚀 DAILY QUIZ LIMIT
+    // 🚀 QUIZ LIMIT
     quizCountToday: {
       type: Number,
 
       default: 0,
     },
 
-    // 🚀 RESET DAILY
     lastQuizDate: {
       type: Date,
 
@@ -47,6 +46,24 @@ const userSchema = new mongoose.Schema(
 
     // 🚀 SUBSCRIPTION
     subscriptionExpires: {
+      type: Date,
+    },
+
+    // 🚀 XP SYSTEM
+    xp: {
+      type: Number,
+
+      default: 0,
+    },
+
+    // 🚀 STREAK SYSTEM
+    streak: {
+      type: Number,
+
+      default: 0,
+    },
+
+    lastActiveDate: {
       type: Date,
     },
   },

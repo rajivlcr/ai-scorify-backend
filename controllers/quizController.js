@@ -4,67 +4,63 @@ import Result from "../models/Result.js";
 
 import BookContent from "../models/BookContent.js";
 
+import User from "../models/User.js";
+
 import { generateAIQuiz } from "../services/aiService.js";
 
-// ✅ DELAY HELPER
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// ✅ NORMALIZE HELPER
+// 🚀 NORMALIZE
 const normalize = (text) =>
   text?.toLowerCase()?.trim()?.replace("mathematics", "maths");
 
-// 🔥 GENERATE QUIZ
+// 🚀 GENERATE QUIZ
 export const generateQuiz = async (req, res) => {
-  const { subject, chapter } = req.body;
+  const {
+    subject,
+
+    chapter,
+
+    type,
+  } = req.body;
 
   try {
-    console.log("REQ USER:", req.user);
-
-    // ✅ INCREMENT QUIZ COUNT
-    req.user.quizCountToday += 1;
-
-    await req.user.save();
-
     const normalizedSubject = normalize(subject);
 
     const normalizedChapter = normalize(chapter);
 
-    console.log({
-      subject: normalizedSubject,
+    // 🚀 FREE PLAN LIMIT
+    if (req.user.plan === "free" && type !== "mcq") {
+      return res.status(403).json({
+        premiumRequired: true,
 
-      chapter: normalizedChapter,
-    });
+        msg: "Upgrade to Pro",
+      });
+    }
 
+    // 🚀 CHECK CACHE
     let data = await QuestionBank.findOne({
       subject: normalizedSubject,
 
       chapter: normalizedChapter,
+
+      type,
     });
 
-    // ✅ RETURN RANDOM EXISTING
-    if (data && data.variants.length > 0) {
-      const random = Math.floor(Math.random() * data.variants.length);
+    // 🚀 RETURN RANDOM QUESTIONS
+    if (data && data.questions.length > 0) {
+      const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
+
+      const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
 
       return res.json({
-        questions: data.variants[random].questions,
+        questions: shuffled.slice(0, limit),
 
-        user: {
-          id: req.user._id,
-
-          name: req.user.name,
-
-          email: req.user.email,
-
-          plan: req.user.plan,
-
-          quizCountToday: req.user.quizCountToday,
-        },
+        cached: true,
       });
     }
 
-    console.log("🚀 Generating first quiz variant...");
+    console.log("🚀 Generating new pool...");
 
-    // ✅ FETCH NCERT
+    // 🚀 GET CHAPTER
     const chapterData = await BookContent.findOne({
       subject: normalizedSubject,
 
@@ -73,11 +69,11 @@ export const generateQuiz = async (req, res) => {
 
     if (!chapterData) {
       return res.status(404).json({
-        msg: "NCERT chapter content not found",
+        msg: "Chapter not found",
       });
     }
 
-    // ✅ GENERATE QUIZ
+    // 🚀 GENERATE QUESTIONS
     const questions = await generateAIQuiz(
       normalizedSubject,
 
@@ -85,123 +81,40 @@ export const generateQuiz = async (req, res) => {
 
       chapterData.content,
 
-      20,
+      type,
     );
 
-    const variants = [
-      {
-        questions,
-      },
-    ];
-
-    // ✅ SAVE DB
-    data = await QuestionBank.create({
+    // 🚀 SAVE TO DB
+    await QuestionBank.create({
       subject: normalizedSubject,
 
       chapter: normalizedChapter,
 
-      variants,
-    });
+      type,
 
-    // ✅ SEND RESPONSE
-    res.json({
       questions,
-
-      user: {
-        id: req.user._id,
-
-        name: req.user.name,
-
-        email: req.user.email,
-
-        plan: req.user.plan,
-
-        quizCountToday: req.user.quizCountToday,
-      },
     });
 
-    // 🔥 BACKGROUND VARIANTS
-    generateRemainingVariants(
-      normalizedSubject,
+    // 🚀 RANDOMIZE
+    const shuffled = [...questions].sort(() => 0.5 - Math.random());
 
-      normalizedChapter,
+    const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
 
-      chapterData.content,
-    );
+    res.json({
+      questions: shuffled.slice(0, limit),
+
+      cached: false,
+    });
   } catch (err) {
-    console.error("QUIZ ERROR:", err);
+    console.log(err);
 
     res.status(500).json({
-      msg: err.message || "Quiz generation failed",
+      msg: "Quiz generation failed",
     });
   }
 };
 
-// 🔥 BACKGROUND VARIANTS
-async function generateRemainingVariants(
-  subject,
-
-  chapter,
-
-  chapterContent,
-) {
-  try {
-    console.log("⚡ Generating background variants...");
-
-    let extraVariants = [];
-
-    for (let i = 0; i < 2; i++) {
-      try {
-        // ✅ WAIT
-        if (i > 0) {
-          console.log("⏳ Waiting before next variant...");
-
-          await delay(12000);
-        }
-
-        const questions = await generateAIQuiz(
-          subject,
-
-          chapter,
-
-          chapterContent,
-
-          20,
-        );
-
-        extraVariants.push({
-          questions,
-        });
-
-        console.log(`✅ Background variant ${i + 2} generated`);
-      } catch (err) {
-        console.log("❌ Background variant failed:", err.message);
-      }
-    }
-
-    // ✅ UPDATE DB
-    await QuestionBank.findOneAndUpdate(
-      {
-        subject,
-        chapter,
-      },
-
-      {
-        $push: {
-          variants: {
-            $each: extraVariants,
-          },
-        },
-      },
-    );
-
-    console.log("✅ Background variants saved");
-  } catch (err) {
-    console.log("❌ Background generation error:", err.message);
-  }
-}
-
-// 🔥 SUBMIT QUIZ
+// 🚀 SUBMIT QUIZ
 export const submitQuiz = async (req, res) => {
   try {
     const {
@@ -224,6 +137,7 @@ export const submitQuiz = async (req, res) => {
       }
     });
 
+    // 🚀 SAVE RESULT
     await Result.create({
       userId,
 
@@ -236,13 +150,56 @@ export const submitQuiz = async (req, res) => {
       total: quiz.length,
     });
 
+    // 🚀 USER
+    const user = await User.findById(req.user.id);
+
+    // 🚀 XP
+    let earnedXP = 10;
+
+    const accuracy = (score / quiz.length) * 100;
+
+    if (accuracy >= 80) {
+      earnedXP += 5;
+    }
+
+    user.xp += earnedXP;
+
+    // 🚀 STREAK
+    const today = new Date();
+
+    const lastActive = user.lastActiveDate
+      ? new Date(user.lastActiveDate)
+      : null;
+
+    if (!lastActive) {
+      user.streak = 1;
+    } else {
+      const diffDays = Math.floor((today - lastActive) / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 1) {
+        user.streak += 1;
+      } else if (diffDays > 1) {
+        user.streak = 1;
+      }
+    }
+
+    user.lastActiveDate = today;
+
+    await user.save();
+
     res.json({
       score,
 
       total: quiz.length,
+
+      earnedXP,
+
+      streak: user.streak,
+
+      totalXP: user.xp,
     });
   } catch (err) {
-    console.error(err);
+    console.log(err);
 
     res.status(500).json({
       msg: "Submit failed",

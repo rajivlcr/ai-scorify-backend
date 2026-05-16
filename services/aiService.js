@@ -1,186 +1,209 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import Groq from "groq-sdk";
+import dotenv from "dotenv";
 
+dotenv.config();
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// ✅ SMART CHUNKING
-function splitIntoChunks(text, chunkSize = 2500) {
+// 🚀 EXTRACT JSON
+function extractJSON(text) {
+  try {
+    const start = text.indexOf("[");
+
+    const end = text.lastIndexOf("]");
+
+    if (start === -1 || end === -1) {
+      return [];
+    }
+
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    console.log("⚠️ Invalid JSON skipped");
+
+    return [];
+  }
+}
+
+// 🚀 AI QUIZ GENERATOR
+export async function generateAIQuiz(
+  subject,
+
+  chapter,
+
+  content,
+
+  type,
+) {
+  // 🚀 SPLIT CHAPTER
   const chunks = [];
 
-  // ✅ SHORT CHAPTERS
-  if (text.length <= 10000) {
-    for (let i = 0; i < text.length; i += chunkSize) {
-      chunks.push(text.slice(i, i + chunkSize));
-    }
+  const chunkSize = 2500;
 
-    return chunks;
+  for (let i = 0; i < content.length; i += chunkSize) {
+    chunks.push(content.slice(i, i + chunkSize));
   }
 
-  // ✅ LONG CHAPTERS
-  const quarter = Math.floor(text.length / 4);
+  // 🚀 ONLY 2 CHUNKS
+  const limitedChunks = chunks.slice(0, 2);
 
-  // Beginning
-  chunks.push(text.slice(0, chunkSize));
+  let allQuestions = [];
 
-  // Early middle
-  chunks.push(text.slice(quarter, quarter + chunkSize));
-
-  // Late middle
-  chunks.push(text.slice(quarter * 2, quarter * 2 + chunkSize));
-
-  // Ending
-  chunks.push(text.slice(-chunkSize));
-
-  return chunks;
-}
-
-// ✅ REMOVE DUPLICATES
-function removeDuplicates(questions) {
-  const seen = new Set();
-
-  return questions.filter((q) => {
-    const normalized = q.question?.toLowerCase()?.trim();
-
-    if (seen.has(normalized)) {
-      return false;
-    }
-
-    seen.add(normalized);
-
-    return true;
-  });
-}
-
-// 🔥 GENERATE AI QUIZ
-export const generateAIQuiz = async (
-  subject,
-  chapter,
-  chapterContent,
-  count = 20,
-) => {
-  try {
-    console.log("📚 Splitting chapter...");
-
-    const chunks = splitIntoChunks(chapterContent);
-
-    // ✅ 4 chunks × 6 = 24
-    const questionsPerChunk = 6;
-
-    let allQuestions = [];
-
-    // ✅ PROCESS CHUNKS
-    for (let i = 0; i < chunks.length; i++) {
-      // ✅ STOP IF ENOUGH
-      if (allQuestions.length >= count) {
-        break;
+  for (let i = 0; i < limitedChunks.length; i++) {
+    try {
+      // 🚀 DELAY
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, 2000));
       }
 
-      const chunk = chunks[i];
+      const chunk = limitedChunks[i];
 
-      console.log(`🤖 Processing chunk ${i + 1}/${chunks.length}`);
+      let prompt = "";
 
-      const prompt = `
-You are an expert CBSE quiz generator.
+      // 🚀 MCQ
+      if (type === "mcq") {
+        prompt = `
 
-Generate exactly ${questionsPerChunk} multiple-choice questions ONLY from the NCERT content below.
+Generate 8 CBSE MCQ questions.
 
-STRICT RULES:
-- Follow NCERT syllabus only
-- No extra concepts
-- Difficulty suitable for CBSE students
-- Each question must have 4 options
-- Only ONE correct answer
-- Avoid duplicate questions
-- Questions should test understanding
-- Output MUST be valid JSON only
-- No markdown
-- No explanations outside JSON
+Return ONLY valid JSON array.
 
-Subject: ${subject}
+Format:
 
-Chapter: ${chapter}
-
-NCERT CONTENT:
-${chunk}
-
-Return format:
 [
   {
-    "question": "string",
-    "options": ["A", "B", "C", "D"],
-    "correctAnswer": "string",
-    "explanation": ""
+    "type":"mcq",
+
+    "question":"...",
+
+    "options":[
+      "...",
+      "...",
+      "...",
+      "..."
+    ],
+
+    "correctAnswer":"..."
   }
 ]
+
+Rules:
+- Strict JSON only
+- No markdown
+- No explanation
+
+Chapter:
+${chunk}
+
 `;
-
-      try {
-        const completion = await groq.chat.completions.create({
-          model: "llama-3.1-8b-instant",
-
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-
-          temperature: 0.7,
-
-          max_tokens: 1200,
-        });
-
-        let text = completion.choices[0]?.message?.content;
-
-        if (!text) continue;
-
-        // ✅ EXTRACT JSON
-        const start = text.indexOf("[");
-
-        const end = text.lastIndexOf("]");
-
-        if (start === -1 || end === -1) {
-          console.log("⚠️ Invalid JSON response skipped");
-
-          continue;
-        }
-
-        const jsonString = text.substring(start, end + 1);
-
-        let parsed = [];
-
-        try {
-          parsed = JSON.parse(jsonString);
-        } catch {
-          console.log("⚠️ Invalid JSON skipped");
-
-          continue;
-        }
-
-        if (Array.isArray(parsed)) {
-          allQuestions.push(...parsed);
-        }
-      } catch (err) {
-        console.log(`❌ Chunk ${i + 1} failed`, err.message);
       }
-    }
 
-    // ✅ REMOVE DUPLICATES
-    allQuestions = removeDuplicates(allQuestions);
+      // 🚀 ASSERTION
+      else if (type === "assertion") {
+        prompt = `
 
-    // ✅ FINAL LIMIT
-    allQuestions = allQuestions.slice(0, count);
+Generate 5 CBSE Assertion and Reason questions.
 
-    console.log(`✅ Final questions: ${allQuestions.length}`);
+Return ONLY valid JSON array.
 
-    return allQuestions;
-  } catch (err) {
-    console.error("❌ AI ERROR:", err.message);
+Format:
 
-    throw new Error("AI quiz generation failed");
+[
+  {
+    "type":"assertion_reason",
+
+    "assertion":"When lightning strikes, the sound is heard a little after the flash is seen.",
+
+    "reason":"The velocity of light is greater than that of sound.",
+
+    "options":[
+      "Both A and R are true and R is the correct explanation of A.",
+      "Both A and R are true but R is not the correct explanation of A.",
+      "A is true but R is false.",
+      "A is false but R is true.",
+      "Both A and R are false."
+    ],
+
+    "correctAnswer":"Both A and R are true and R is the correct explanation of A."
   }
-};
+]
+
+Rules:
+- Use ONLY the exact options given
+- Strict JSON only
+- No markdown
+- No explanation
+- Questions must be CBSE style
+
+Chapter:
+${chunk}
+
+`;
+      }
+
+      // 🚀 CASE STUDY
+      else {
+        prompt = `
+
+Generate 2 CBSE Case Study questions.
+
+Return ONLY valid JSON array.
+
+Format:
+
+[
+  {
+    "type":"case_study",
+
+    "question":"Read the following passage carefully...",
+
+    "options":[
+      "...",
+      "...",
+      "...",
+      "..."
+    ],
+
+    "correctAnswer":"..."
+  }
+]
+
+Rules:
+- Strict JSON only
+- No markdown
+- No explanation
+
+Chapter:
+${chunk}
+
+`;
+      }
+
+      const completion = await groq.chat.completions.create({
+        model: "llama-3.1-8b-instant",
+
+        messages: [
+          {
+            role: "user",
+
+            content: prompt,
+          },
+        ],
+
+        temperature: 0.3,
+
+        max_tokens: 700,
+      });
+
+      const text = completion.choices?.[0]?.message?.content;
+
+      const parsed = extractJSON(text);
+
+      allQuestions = [...allQuestions, ...parsed];
+    } catch (err) {
+      console.log("❌ AI ERROR:", err.message);
+    }
+  }
+
+  return allQuestions;
+}
