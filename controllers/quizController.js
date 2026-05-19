@@ -14,28 +14,59 @@ const normalize = (text) =>
 
 // 🚀 GENERATE QUIZ
 export const generateQuiz = async (req, res) => {
-  const {
-    className,
-
-    subject,
-
-    chapter,
-
-    type,
-  } = req.body;
+  const { className, subject, chapter, type } = req.body;
 
   try {
     const normalizedSubject = normalize(subject);
 
     const normalizedChapter = normalize(chapter);
 
-    // 🚀 FREE PLAN LIMIT
-    if (req.user.plan === "free" && type !== "mcq") {
+    // 🚀 USER
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        msg: "User not found",
+      });
+    }
+
+    // 🚀 PREMIUM LOCK
+    if (user.plan?.toLowerCase() === "free" && type !== "mcq") {
       return res.status(403).json({
         premiumRequired: true,
 
-        msg: "Upgrade to Pro",
+        msg: "Upgrade to PRO",
       });
+    }
+
+    // 🚀 FREE PLAN DAILY LIMIT
+    if (user.plan?.toLowerCase() === "free") {
+      const today = new Date().toDateString();
+
+      const lastDate = user.lastQuizDate
+        ? new Date(user.lastQuizDate).toDateString()
+        : null;
+
+      // 🚀 RESET COUNT
+      if (today !== lastDate) {
+        user.quizCountToday = 0;
+
+        user.lastQuizDate = new Date();
+      }
+
+      // 🚀 LIMIT
+      if (user.quizCountToday >= 5) {
+        return res.status(403).json({
+          premiumRequired: true,
+
+          msg: "Daily free limit reached",
+        });
+      }
+
+      // 🚀 INCREMENT
+      user.quizCountToday += 1;
+
+      await user.save();
     }
 
     // 🚀 CHECK CACHE
@@ -49,16 +80,19 @@ export const generateQuiz = async (req, res) => {
       type,
     });
 
+    // 🚀 QUESTION LIMIT
+    const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
+
     // 🚀 RETURN RANDOM QUESTIONS
     if (data && data.questions.length > 0) {
       const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
-
-      const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
 
       return res.json({
         questions: shuffled.slice(0, limit),
 
         cached: true,
+
+        user,
       });
     }
 
@@ -90,6 +124,12 @@ export const generateQuiz = async (req, res) => {
       type,
     );
 
+    if (!questions || questions.length === 0) {
+      return res.status(500).json({
+        msg: "AI failed to generate questions",
+      });
+    }
+
     // 🚀 SAVE TO DB
     await QuestionBank.create({
       className,
@@ -106,12 +146,12 @@ export const generateQuiz = async (req, res) => {
     // 🚀 RANDOMIZE
     const shuffled = [...questions].sort(() => 0.5 - Math.random());
 
-    const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
-
     res.json({
       questions: shuffled.slice(0, limit),
 
       cached: false,
+
+      user,
     });
   } catch (err) {
     console.log(err);
@@ -125,17 +165,7 @@ export const generateQuiz = async (req, res) => {
 // 🚀 SUBMIT QUIZ
 export const submitQuiz = async (req, res) => {
   try {
-    const {
-      userId,
-
-      subject,
-
-      chapter,
-
-      quiz,
-
-      answers,
-    } = req.body;
+    const { userId, subject, chapter, quiz, answers } = req.body;
 
     let score = 0;
 
