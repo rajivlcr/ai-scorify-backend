@@ -15,6 +15,8 @@ const normalize = (text) =>
 // 🚀 GENERATE QUIZ
 export const generateQuiz = async (req, res) => {
   const {
+    className,
+
     subject,
 
     chapter,
@@ -38,6 +40,8 @@ export const generateQuiz = async (req, res) => {
 
     // 🚀 CHECK CACHE
     let data = await QuestionBank.findOne({
+      className,
+
       subject: normalizedSubject,
 
       chapter: normalizedChapter,
@@ -62,6 +66,8 @@ export const generateQuiz = async (req, res) => {
 
     // 🚀 GET CHAPTER
     const chapterData = await BookContent.findOne({
+      className,
+
       subject: normalizedSubject,
 
       chapter: normalizedChapter,
@@ -86,6 +92,8 @@ export const generateQuiz = async (req, res) => {
 
     // 🚀 SAVE TO DB
     await QuestionBank.create({
+      className,
+
       subject: normalizedSubject,
 
       chapter: normalizedChapter,
@@ -164,6 +172,8 @@ export const submitQuiz = async (req, res) => {
 
     user.xp += earnedXP;
 
+    console.log("XP UPDATED:", user.xp);
+
     // 🚀 STREAK
     const today = new Date();
 
@@ -186,6 +196,8 @@ export const submitQuiz = async (req, res) => {
     user.lastActiveDate = today;
 
     await user.save();
+
+    console.log("USER SAVED");
 
     res.json({
       score,

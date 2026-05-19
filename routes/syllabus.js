@@ -1,15 +1,21 @@
 import express from "express";
-import {
-  getSyllabus,
-  getSubjectByName,
-} from "../controllers/syllabusController.js";
+
+import { getSubjects, getChapters } from "../controllers/syllabusController.js";
 
 const router = express.Router();
 
-// ✅ get all subjects
-router.get("/", getSyllabus);
+// 🚀 SUBJECTS
+router.get(
+  "/subjects/:className",
 
-// ✅ get one subject
-router.get("/:name", getSubjectByName);
+  getSubjects,
+);
+
+// 🚀 CHAPTERS
+router.get(
+  "/:name",
+
+  getChapters,
+);
 
 export default router;

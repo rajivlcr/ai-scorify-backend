@@ -16,6 +16,8 @@ const questionSchema = new mongoose.Schema({
 
 const questionBankSchema = new mongoose.Schema(
   {
+    className: String,
+
     subject: String,
 
     chapter: String,

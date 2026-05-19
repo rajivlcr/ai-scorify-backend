@@ -1,24 +1,53 @@
-import Subject from "../models/Subject.js";
+import BookContent from "../models/BookContent.js";
 
-// ✅ existing
-export const getSyllabus = async (req, res) => {
-  const data = await Subject.find();
-  res.json(data);
+// 🚀 GET SUBJECTS
+export const getSubjects = async (req, res) => {
+  try {
+    const { className } = req.params;
+
+    const subjects = await BookContent.distinct(
+      "subject",
+
+      {
+        className,
+      },
+    );
+
+    res.json(subjects);
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Failed to fetch subjects",
+    });
+  }
 };
 
-// ✅ ADD THIS (important)
-export const getSubjectByName = async (req, res) => {
+// 🚀 GET CHAPTERS
+export const getChapters = async (req, res) => {
   try {
-    const subject = await Subject.findOne({
-      name: req.params.name,
+    const { name } = req.params;
+
+    const className = req.query.className;
+
+    const chapters = await BookContent.find({
+      className,
+
+      subject: name,
+    })
+
+      .select("chapter");
+
+    res.json({
+      chapters: chapters.map((c) => ({
+        name: c.chapter,
+      })),
     });
-
-    if (!subject) {
-      return res.status(404).json({ msg: "Subject not found" });
-    }
-
-    res.json(subject);
   } catch (err) {
-    res.status(500).json({ msg: "Server error" });
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Failed to fetch chapters",
+    });
   }
 };

@@ -1,10 +1,17 @@
 import mongoose from "mongoose";
 
-const schema = new mongoose.Schema({
+const bookSchema = new mongoose.Schema({
   className: String,
+
   subject: String,
+
   chapter: String,
+
   content: String,
 });
 
-export default mongoose.model("BookContent", schema);
+export default mongoose.model(
+  "BookContent",
+
+  bookSchema,
+);
