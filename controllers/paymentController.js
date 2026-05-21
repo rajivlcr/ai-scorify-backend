@@ -4,6 +4,7 @@ import crypto from "crypto";
 
 import User from "../models/User.js";
 
+// 🚀 INSTANCE
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
 
@@ -37,6 +38,8 @@ export const createOrder = async (req, res) => {
 export const verifyPayment = async (req, res) => {
   try {
     const {
+      userId,
+
       razorpay_order_id,
 
       razorpay_payment_id,
@@ -44,49 +47,44 @@ export const verifyPayment = async (req, res) => {
       razorpay_signature,
     } = req.body;
 
-    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    // 🚀 VERIFY SIGNATURE
+    const sign = crypto
 
-    const expectedSign = crypto
       .createHmac(
         "sha256",
 
         process.env.RAZORPAY_KEY_SECRET,
       )
 
-      .update(sign.toString())
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
 
       .digest("hex");
 
-    // ✅ VERIFY
-    if (razorpay_signature !== expectedSign) {
+    // 🚀 INVALID
+    if (sign !== razorpay_signature) {
       return res.status(400).json({
-        msg: "Invalid payment",
+        msg: "Invalid signature",
       });
     }
 
-    // ✅ UPDATE USER
-    const user = await User.findById(req.user._id);
+    // 🚀 USER
+    const user = await User.findById(userId);
 
+    if (!user) {
+      return res.status(404).json({
+        msg: "User not found",
+      });
+    }
+
+    // 🚀 UPDATE PLAN
     user.plan = "pro";
-
-    user.subscriptionExpires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
     await user.save();
 
     res.json({
       success: true,
 
-      user: {
-        id: user._id,
-
-        name: user.name,
-
-        email: user.email,
-
-        plan: user.plan,
-
-        quizCountToday: user.quizCountToday,
-      },
+      user,
     });
   } catch (err) {
     console.log(err);
