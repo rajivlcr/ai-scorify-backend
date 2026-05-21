@@ -2,19 +2,21 @@ import jwt from "jsonwebtoken";
 
 import User from "../models/User.js";
 
-export default async (req, res, next) => {
+export default async function (req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
+    const token = req.headers.authorization?.split(" ")[1];
 
-    if (!authHeader) {
+    if (!token) {
       return res.status(401).json({
-        msg: "No token provided",
+        msg: "No token",
       });
     }
 
-    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(
+      token,
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      process.env.JWT_SECRET,
+    );
 
     const user = await User.findById(decoded.id);
 
@@ -24,14 +26,29 @@ export default async (req, res, next) => {
       });
     }
 
+    // 🚀 CHECK PRO EXPIRY
+    if (
+      user.plan === "pro" &&
+      user.planExpiresAt &&
+      new Date() > user.planExpiresAt
+    ) {
+      console.log("🚀 PRO expired. Downgrading...");
+
+      user.plan = "free";
+
+      user.planExpiresAt = null;
+
+      await user.save();
+    }
+
     req.user = user;
 
     next();
   } catch (err) {
-    console.log("AUTH ERROR:", err.message);
+    console.log(err);
 
     res.status(401).json({
       msg: "Invalid token",
     });
   }
-};
+}

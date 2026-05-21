@@ -56,6 +56,10 @@ const userSchema = new mongoose.Schema(
       default: 0,
     },
 
+    planExpiresAt: {
+      type: Date,
+    },
+
     // 🚀 STREAK SYSTEM
     streak: {
       type: Number,

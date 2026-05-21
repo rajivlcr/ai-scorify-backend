@@ -9,7 +9,7 @@ export const getSubjects = async (req, res) => {
       "subject",
 
       {
-        className,
+        className: className.toLowerCase(),
       },
     );
 
@@ -26,23 +26,19 @@ export const getSubjects = async (req, res) => {
 // 🚀 GET CHAPTERS
 export const getChapters = async (req, res) => {
   try {
-    const { name } = req.params;
+    const { className, subject } = req.params;
 
-    const className = req.query.className;
+    const chapters = await BookContent.distinct(
+      "chapter",
 
-    const chapters = await BookContent.find({
-      className,
+      {
+        className: className.toLowerCase(),
 
-      subject: name,
-    })
+        subject: subject.toLowerCase(),
+      },
+    );
 
-      .select("chapter");
-
-    res.json({
-      chapters: chapters.map((c) => ({
-        name: c.chapter,
-      })),
-    });
+    res.json(chapters);
   } catch (err) {
     console.log(err);
 

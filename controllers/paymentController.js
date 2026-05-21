@@ -15,7 +15,8 @@ const razorpay = new Razorpay({
 export const createOrder = async (req, res) => {
   try {
     const options = {
-      amount: 9900,
+      // 🚀 ₹199
+      amount: 19900,
 
       currency: "INR",
 
@@ -76,8 +77,15 @@ export const verifyPayment = async (req, res) => {
       });
     }
 
-    // 🚀 UPDATE PLAN
+    // 🚀 ACTIVATE PRO
     user.plan = "pro";
+
+    // 🚀 30 DAYS EXPIRY
+    const expiry = new Date();
+
+    expiry.setDate(expiry.getDate() + 30);
+
+    user.planExpiresAt = expiry;
 
     await user.save();
 

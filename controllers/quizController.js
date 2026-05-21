@@ -14,89 +14,29 @@ const normalize = (text) =>
 
 // 🚀 GENERATE QUIZ
 export const generateQuiz = async (req, res) => {
-  const { className, subject, chapter, type } = req.body;
+  const {
+    className,
+
+    subject,
+
+    chapter,
+
+    type,
+  } = req.body;
 
   try {
     const normalizedSubject = normalize(subject);
 
     const normalizedChapter = normalize(chapter);
 
-    // 🚀 USER
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({
-        msg: "User not found",
-      });
-    }
-
-    // 🚀 PREMIUM LOCK
-    if (user.plan?.toLowerCase() === "free" && type !== "mcq") {
+    // 🚀 FREE PLAN LIMIT
+    if (req.user.plan === "free" && type !== "mcq") {
       return res.status(403).json({
         premiumRequired: true,
 
-        msg: "Upgrade to PRO",
+        msg: "Upgrade to Pro",
       });
     }
-
-    // 🚀 FREE PLAN DAILY LIMIT
-    if (user.plan?.toLowerCase() === "free") {
-      const today = new Date().toDateString();
-
-      const lastDate = user.lastQuizDate
-        ? new Date(user.lastQuizDate).toDateString()
-        : null;
-
-      // 🚀 RESET COUNT
-      if (today !== lastDate) {
-        user.quizCountToday = 0;
-
-        user.lastQuizDate = new Date();
-      }
-
-      // 🚀 LIMIT
-      if (user.quizCountToday >= 5) {
-        return res.status(403).json({
-          premiumRequired: true,
-
-          msg: "Daily free limit reached",
-        });
-      }
-
-      // 🚀 INCREMENT
-      user.quizCountToday += 1;
-
-      await user.save();
-    }
-
-    // 🚀 CHECK CACHE
-    let data = await QuestionBank.findOne({
-      className,
-
-      subject: normalizedSubject,
-
-      chapter: normalizedChapter,
-
-      type,
-    });
-
-    // 🚀 QUESTION LIMIT
-    const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
-
-    // 🚀 RETURN RANDOM QUESTIONS
-    if (data && data.questions.length > 0) {
-      const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
-
-      return res.json({
-        questions: shuffled.slice(0, limit),
-
-        cached: true,
-
-        user,
-      });
-    }
-
-    console.log("🚀 Generating new pool...");
 
     // 🚀 GET CHAPTER
     const chapterData = await BookContent.findOne({
@@ -113,7 +53,68 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 GENERATE QUESTIONS
+    // 🚀 CHECK CACHE
+    let data = await QuestionBank.findOne({
+      className,
+
+      subject: normalizedSubject,
+
+      chapter: normalizedChapter,
+
+      type,
+    });
+
+    // 🚀 EXISTING POOL
+    if (data && data.questions.length > 0) {
+      // 🚀 AUTO EXPAND
+      if (data.questions.length < 100) {
+        console.log("🚀 Expanding question pool...");
+
+        try {
+          const newQuestions = await generateAIQuiz(
+            normalizedSubject,
+
+            normalizedChapter,
+
+            chapterData.content,
+
+            type,
+          );
+
+          // 🚀 REMOVE DUPLICATES
+          const existing = new Set(data.questions.map((q) => q.question));
+
+          const uniqueQuestions = newQuestions.filter(
+            (q) => !existing.has(q.question),
+          );
+
+          // 🚀 APPEND
+          data.questions.push(...uniqueQuestions);
+
+          // 🚀 SAVE
+          await data.save();
+
+          console.log(`✅ Added ${uniqueQuestions.length} new questions`);
+        } catch (err) {
+          console.log("❌ Pool expansion failed:", err.message);
+        }
+      }
+
+      // 🚀 RANDOMIZE
+      const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
+
+      const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
+
+      return res.json({
+        questions: shuffled.slice(0, limit),
+
+        cached: true,
+      });
+    }
+
+    // 🚀 FIRST GENERATION
+    console.log("🚀 Generating new pool...");
+
     const questions = await generateAIQuiz(
       normalizedSubject,
 
@@ -124,14 +125,8 @@ export const generateQuiz = async (req, res) => {
       type,
     );
 
-    if (!questions || questions.length === 0) {
-      return res.status(500).json({
-        msg: "AI failed to generate questions",
-      });
-    }
-
     // 🚀 SAVE TO DB
-    await QuestionBank.create({
+    data = await QuestionBank.create({
       className,
 
       subject: normalizedSubject,
@@ -144,14 +139,14 @@ export const generateQuiz = async (req, res) => {
     });
 
     // 🚀 RANDOMIZE
-    const shuffled = [...questions].sort(() => 0.5 - Math.random());
+    const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
+
+    const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
 
     res.json({
       questions: shuffled.slice(0, limit),
 
       cached: false,
-
-      user,
     });
   } catch (err) {
     console.log(err);
@@ -165,10 +160,18 @@ export const generateQuiz = async (req, res) => {
 // 🚀 SUBMIT QUIZ
 export const submitQuiz = async (req, res) => {
   try {
-    const { userId, subject, chapter, quiz, answers } = req.body;
+    const { userId, subject, chapter, quiz = [], answers = [] } = req.body;
+
+    // 🚀 VALIDATION
+    if (!userId || !quiz.length || !answers.length) {
+      return res.status(400).json({
+        msg: "Quiz data missing",
+      });
+    }
 
     let score = 0;
 
+    // 🚀 SCORE
     quiz.forEach((q, i) => {
       if (answers[i] === q.correctAnswer) {
         score++;
@@ -178,18 +181,20 @@ export const submitQuiz = async (req, res) => {
     // 🚀 SAVE RESULT
     await Result.create({
       userId,
-
       subject: normalize(subject),
-
       chapter: normalize(chapter),
-
       score,
-
       total: quiz.length,
     });
 
     // 🚀 USER
     const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        msg: "User not found",
+      });
+    }
 
     // 🚀 XP
     let earnedXP = 10;
@@ -201,8 +206,6 @@ export const submitQuiz = async (req, res) => {
     }
 
     user.xp += earnedXP;
-
-    console.log("XP UPDATED:", user.xp);
 
     // 🚀 STREAK
     const today = new Date();
@@ -227,17 +230,12 @@ export const submitQuiz = async (req, res) => {
 
     await user.save();
 
-    console.log("USER SAVED");
-
+    // 🚀 RESPONSE
     res.json({
       score,
-
       total: quiz.length,
-
       earnedXP,
-
       streak: user.streak,
-
       totalXP: user.xp,
     });
   } catch (err) {

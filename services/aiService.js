@@ -1,7 +1,9 @@
 import Groq from "groq-sdk";
+
 import dotenv from "dotenv";
 
 dotenv.config();
+
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
@@ -9,15 +11,23 @@ const groq = new Groq({
 // 🚀 EXTRACT JSON
 function extractJSON(text) {
   try {
-    const start = text.indexOf("[");
+    const cleaned = text
 
-    const end = text.lastIndexOf("]");
+      ?.replace(/```json/g, "")
+
+      ?.replace(/```/g, "")
+
+      ?.trim();
+
+    const start = cleaned.indexOf("[");
+
+    const end = cleaned.lastIndexOf("]");
 
     if (start === -1 || end === -1) {
       return [];
     }
 
-    return JSON.parse(text.slice(start, end + 1));
+    return JSON.parse(cleaned.slice(start, end + 1));
   } catch {
     console.log("⚠️ Invalid JSON skipped");
 
@@ -38,10 +48,15 @@ export async function generateAIQuiz(
   // 🚀 SPLIT CHAPTER
   const chunks = [];
 
-  const chunkSize = 2500;
+  // 🚀 REDUCED CHUNK SIZE
+  const chunkSize = 1200;
 
   for (let i = 0; i < content.length; i += chunkSize) {
-    chunks.push(content.slice(i, i + chunkSize));
+    chunks.push({
+      text: content.slice(i, i + chunkSize),
+
+      retried: false,
+    });
   }
 
   // 🚀 ONLY 2 CHUNKS
@@ -56,7 +71,7 @@ export async function generateAIQuiz(
         await new Promise((r) => setTimeout(r, 2000));
       }
 
-      const chunk = limitedChunks[i];
+      const chunk = limitedChunks[i].text;
 
       let prompt = "";
 
@@ -88,9 +103,10 @@ Format:
 ]
 
 Rules:
-- Strict JSON only
-- No markdown
-- No explanation
+- STRICT JSON ONLY
+- NO markdown
+- NO explanation
+- NO extra text
 
 Chapter:
 ${chunk}
@@ -110,18 +126,15 @@ Format:
 
 [
   {
-    "type":"assertion_reason",
+    "type":"assertion",
 
-    "assertion":"When lightning strikes, the sound is heard a little after the flash is seen.",
-
-    "reason":"The velocity of light is greater than that of sound.",
+    "question":"Assertion (A): ... Reason (R): ...",
 
     "options":[
       "Both A and R are true and R is the correct explanation of A.",
       "Both A and R are true but R is not the correct explanation of A.",
       "A is true but R is false.",
-      "A is false but R is true.",
-      "Both A and R are false."
+      "A is false but R is true."
     ],
 
     "correctAnswer":"Both A and R are true and R is the correct explanation of A."
@@ -129,11 +142,12 @@ Format:
 ]
 
 Rules:
-- Use ONLY the exact options given
-- Strict JSON only
-- No markdown
-- No explanation
-- Questions must be CBSE style
+- STRICT JSON ONLY
+- NO markdown
+- NO explanation
+- NO extra text
+- Use ONLY the exact options provided
+- Questions must follow CBSE pattern
 
 Chapter:
 ${chunk}
@@ -169,9 +183,10 @@ Format:
 ]
 
 Rules:
-- Strict JSON only
-- No markdown
-- No explanation
+- STRICT JSON ONLY
+- NO markdown
+- NO explanation
+- NO extra text
 
 Chapter:
 ${chunk}
@@ -184,6 +199,12 @@ ${chunk}
 
         messages: [
           {
+            role: "system",
+
+            content: "Return ONLY valid JSON array.",
+          },
+
+          {
             role: "user",
 
             content: prompt,
@@ -192,7 +213,7 @@ ${chunk}
 
         temperature: 0.3,
 
-        max_tokens: 700,
+        max_tokens: 800,
       });
 
       const text = completion.choices?.[0]?.message?.content;
@@ -202,6 +223,23 @@ ${chunk}
       allQuestions = [...allQuestions, ...parsed];
     } catch (err) {
       console.log("❌ AI ERROR:", err.message);
+
+      // 🚀 RATE LIMIT RETRY
+      if (err?.status === 429) {
+        console.log("⏳ Retrying after rate limit...");
+
+        // 🚀 WAIT 17 SECONDS
+        await new Promise((r) => setTimeout(r, 17000));
+
+        // 🚀 RETRY ONLY ONCE
+        if (!limitedChunks[i].retried) {
+          limitedChunks[i].retried = true;
+
+          i--;
+
+          continue;
+        }
+      }
     }
   }
 

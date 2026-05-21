@@ -13,7 +13,7 @@ router.get(
 
 // 🚀 CHAPTERS
 router.get(
-  "/:name",
+  "/chapters/:className/:subject",
 
   getChapters,
 );
