@@ -1,19 +1,18 @@
 import express from "express";
-import Result from "../models/Result.js";
+
+import auth from "../middleware/auth.js";
+
+import { getDashboard } from "../controllers/dashboardController.js";
 
 const router = express.Router();
 
-router.get("/:userId", async (req, res) => {
-  try {
-    const data = await Result.find({ userId: req.params.userId }).sort({
-      createdAt: -1,
-    });
+// 🚀 DASHBOARD
+router.get(
+  "/",
 
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ msg: "Error fetching dashboard" });
-  }
-});
+  auth,
+
+  getDashboard,
+);
 
 export default router;

@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import adminRoutes from "./routes/admin.js";
 //import bookRoutes from "./routes/book.js";
 import authRoutes from "./routes/auth.js";
 import quizRoutes from "./routes/quiz.js";
@@ -19,6 +20,7 @@ app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
 //app.use("/api/books", bookRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/syllabus", syllabusRoutes);
 app.use("/api/payment", paymentRoutes);

@@ -1,5 +1,3 @@
-// 📁 backend/controllers/quizController.js
-
 import QuestionBank from "../models/QuestionBank.js";
 
 import Result from "../models/Result.js";
@@ -7,6 +5,8 @@ import Result from "../models/Result.js";
 import BookContent from "../models/BookContent.js";
 
 import User from "../models/User.js";
+
+import { generateAIQuiz } from "../services/aiService.js";
 
 // 🚀 NORMALIZE
 const normalize = (text) =>
@@ -38,7 +38,7 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 CHECK CHAPTER EXISTS
+    // 🚀 GET CHAPTER
     const chapterData = await BookContent.findOne({
       className,
 
@@ -53,8 +53,8 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 FETCH QUESTION POOL
-    const data = await QuestionBank.findOne({
+    // 🚀 CHECK CACHE
+    let data = await QuestionBank.findOne({
       className,
 
       subject: normalizedSubject,
@@ -64,30 +64,95 @@ export const generateQuiz = async (req, res) => {
       type,
     });
 
-    // 🚀 NO QUESTIONS
-    if (!data || !data.questions || data.questions.length === 0) {
-      return res.status(404).json({
-        msg: "Question pool not available",
+    // 🚀 EXISTING POOL
+    if (data && data.questions.length > 0) {
+      // 🚀 AUTO EXPAND
+      if (data.questions.length < 100) {
+        console.log("🚀 Expanding question pool...");
+
+        try {
+          const newQuestions = await generateAIQuiz(
+            normalizedSubject,
+
+            normalizedChapter,
+
+            chapterData.content,
+
+            type,
+          );
+
+          // 🚀 REMOVE DUPLICATES
+          const existing = new Set(data.questions.map((q) => q.question));
+
+          const uniqueQuestions = newQuestions.filter(
+            (q) => !existing.has(q.question),
+          );
+
+          // 🚀 APPEND
+          data.questions.push(...uniqueQuestions);
+
+          // 🚀 SAVE
+          await data.save();
+
+          console.log(`✅ Added ${uniqueQuestions.length} new questions`);
+        } catch (err) {
+          console.log("❌ Pool expansion failed:", err.message);
+        }
+      }
+
+      // 🚀 RANDOMIZE
+      const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
+
+      const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
+
+      return res.json({
+        questions: shuffled.slice(0, limit),
+
+        cached: true,
       });
     }
+
+    // 🚀 FIRST GENERATION
+    console.log("🚀 Generating new pool...");
+
+    const questions = await generateAIQuiz(
+      normalizedSubject,
+
+      normalizedChapter,
+
+      chapterData.content,
+
+      type,
+    );
+
+    // 🚀 SAVE TO DB
+    data = await QuestionBank.create({
+      className,
+
+      subject: normalizedSubject,
+
+      chapter: normalizedChapter,
+
+      type,
+
+      questions,
+    });
 
     // 🚀 RANDOMIZE
     const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
 
-    // 🚀 LIMIT
     const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
 
-    // 🚀 RESPONSE
     res.json({
       questions: shuffled.slice(0, limit),
 
-      cached: true,
+      cached: false,
     });
   } catch (err) {
     console.log(err);
 
     res.status(500).json({
-      msg: "Quiz fetch failed",
+      msg: "Quiz generation failed",
     });
   }
 };
@@ -95,17 +160,7 @@ export const generateQuiz = async (req, res) => {
 // 🚀 SUBMIT QUIZ
 export const submitQuiz = async (req, res) => {
   try {
-    const {
-      userId,
-
-      subject,
-
-      chapter,
-
-      quiz = [],
-
-      answers = [],
-    } = req.body;
+    const { userId, subject, chapter, quiz = [], answers = [] } = req.body;
 
     // 🚀 VALIDATION
     if (!userId || !quiz.length || !answers.length) {
@@ -126,13 +181,9 @@ export const submitQuiz = async (req, res) => {
     // 🚀 SAVE RESULT
     await Result.create({
       userId,
-
       subject: normalize(subject),
-
       chapter: normalize(chapter),
-
       score,
-
       total: quiz.length,
     });
 
@@ -182,13 +233,9 @@ export const submitQuiz = async (req, res) => {
     // 🚀 RESPONSE
     res.json({
       score,
-
       total: quiz.length,
-
       earnedXP,
-
       streak: user.streak,
-
       totalXP: user.xp,
     });
   } catch (err) {
