@@ -1,11 +1,8 @@
 // 📁 backend/controllers/quizController.js
 
 import QuestionBank from "../models/QuestionBank.js";
-
 import Result from "../models/Result.js";
-
 import BookContent from "../models/BookContent.js";
-
 import User from "../models/User.js";
 
 // 🚀 NORMALIZE
@@ -14,36 +11,33 @@ const normalize = (text) =>
 
 // 🚀 GENERATE QUIZ
 export const generateQuiz = async (req, res) => {
-  const {
-    className,
-
-    subject,
-
-    chapter,
-
-    type,
-  } = req.body;
+  const { className, subject, chapter, type } = req.body;
 
   try {
     const normalizedSubject = normalize(subject);
 
     const normalizedChapter = normalize(chapter);
 
-    // 🚀 FREE PLAN LIMIT
-    if (req.user.plan === "free" && type !== "mcq") {
+    // 🚀 LOGGED-IN FREE PLAN CHECK
+    if (req.user && req.user.plan === "free" && type !== "mcq") {
       return res.status(403).json({
         premiumRequired: true,
-
         msg: "Upgrade to Pro",
+      });
+    }
+
+    // 🚀 GUESTS CAN ONLY ACCESS MCQ
+    if (!req.user && type !== "mcq") {
+      return res.status(403).json({
+        premiumRequired: true,
+        msg: "Please register to unlock this quiz type",
       });
     }
 
     // 🚀 CHECK CHAPTER EXISTS
     const chapterData = await BookContent.findOne({
       className,
-
       subject: normalizedSubject,
-
       chapter: normalizedChapter,
     });
 
@@ -56,15 +50,11 @@ export const generateQuiz = async (req, res) => {
     // 🚀 FETCH QUESTION POOL
     const data = await QuestionBank.findOne({
       className,
-
       subject: normalizedSubject,
-
       chapter: normalizedChapter,
-
       type,
     });
 
-    // 🚀 NO QUESTIONS
     if (!data || !data.questions || data.questions.length === 0) {
       return res.status(404).json({
         msg: "Question pool not available",
@@ -77,10 +67,8 @@ export const generateQuiz = async (req, res) => {
     // 🚀 LIMIT
     const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
 
-    // 🚀 RESPONSE
     res.json({
       questions: shuffled.slice(0, limit),
-
       cached: true,
     });
   } catch (err) {
@@ -95,24 +83,16 @@ export const generateQuiz = async (req, res) => {
 // 🚀 SUBMIT QUIZ
 export const submitQuiz = async (req, res) => {
   try {
-    const {
-      userId,
-
-      subject,
-
-      chapter,
-
-      quiz = [],
-
-      answers = [],
-    } = req.body;
+    const { userId, subject, chapter, quiz = [], answers = [] } = req.body;
 
     // 🚀 VALIDATION
-    if (!userId || !quiz.length || !answers.length) {
+    if (!quiz.length || !answers.length) {
       return res.status(400).json({
         msg: "Quiz data missing",
       });
     }
+
+    const isGuest = !userId;
 
     let score = 0;
 
@@ -123,21 +103,29 @@ export const submitQuiz = async (req, res) => {
       }
     });
 
+    // 🚀 GUEST USER
+    if (isGuest) {
+      return res.json({
+        score,
+        total: quiz.length,
+        earnedXP: 0,
+        streak: 0,
+        totalXP: 0,
+        guest: true,
+      });
+    }
+
     // 🚀 SAVE RESULT
     await Result.create({
       userId,
-
       subject: normalize(subject),
-
       chapter: normalize(chapter),
-
       score,
-
       total: quiz.length,
     });
 
     // 🚀 USER
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -182,14 +170,11 @@ export const submitQuiz = async (req, res) => {
     // 🚀 RESPONSE
     res.json({
       score,
-
       total: quiz.length,
-
       earnedXP,
-
       streak: user.streak,
-
       totalXP: user.xp,
+      guest: false,
     });
   } catch (err) {
     console.log(err);

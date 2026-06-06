@@ -8,10 +8,24 @@ import { checkQuizLimit } from "../middleware/checkPlan.js";
 
 const router = express.Router();
 
-// ✅ GENERATE QUIZ
-router.post("/generate", auth, checkQuizLimit, generateQuiz);
+/*
+|--------------------------------------------------------------------------
+| GUEST ROUTES
+|--------------------------------------------------------------------------
+*/
 
-// ✅ SUBMIT QUIZ
-router.post("/submit", auth, submitQuiz);
+// Guest users can generate MCQ quizzes
+router.post("/generate", generateQuiz);
+
+// Guest users can submit quizzes
+router.post("/submit", submitQuiz);
+
+/*
+|--------------------------------------------------------------------------
+| LOGGED IN USER ROUTES
+|--------------------------------------------------------------------------
+*/
+
+// Keep future authenticated routes here
 
 export default router;
