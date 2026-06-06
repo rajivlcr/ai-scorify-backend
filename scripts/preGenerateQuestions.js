@@ -19,19 +19,11 @@ console.log("✅ MongoDB Connected");
 const TYPES = [
   {
     type: "mcq",
-
-    target: 150,
-  },
-
-  {
-    type: "assertion",
-
     target: 60,
   },
 
   {
-    type: "case-study",
-
+    type: "assertion",
     target: 30,
   },
 ];
@@ -49,15 +41,7 @@ async function generatePools() {
 
     // 🚀 LOOP CHAPTERS
     for (const item of chapters) {
-      const {
-        className,
-
-        subject,
-
-        chapter,
-
-        content,
-      } = item;
+      const { className, subject, chapter, content } = item;
 
       console.log("\n====================================");
 
@@ -65,11 +49,7 @@ async function generatePools() {
 
       // 🚀 LOOP TYPES
       for (const config of TYPES) {
-        const {
-          type,
-
-          target,
-        } = config;
+        const { type, target } = config;
 
         console.log("\n------------------------------------");
 
@@ -78,27 +58,27 @@ async function generatePools() {
         // 🚀 FIND EXISTING
         let bank = await QuestionBank.findOne({
           className,
-
           subject,
-
           chapter,
-
           type,
         });
 
-        // 🚀 CREATE EMPTY
+        // 🚀 CREATE ONLY IF NOT EXISTS
         if (!bank) {
           bank = await QuestionBank.create({
             className,
-
             subject,
-
             chapter,
-
             type,
-
             questions: [],
           });
+
+          console.log("🆕 Created new QuestionBank");
+        }
+
+        // 🚀 SAFETY
+        if (!Array.isArray(bank.questions)) {
+          bank.questions = [];
         }
 
         console.log(`📦 Existing: ${bank.questions.length}/${target}`);
@@ -110,17 +90,17 @@ async function generatePools() {
 
             const newQuestions = await generateAIQuiz(
               subject,
-
               chapter,
-
               content,
-
               type,
             );
 
-            // 🚀 EMPTY
+            // 🚀 DEBUG
+            console.log(`📥 Received ${newQuestions?.length || 0} questions`);
+
+            // 🚀 EMPTY RESPONSE
             if (!newQuestions || newQuestions.length === 0) {
-              console.log("⚠️ Empty response");
+              console.log("⚠️ Empty AI response");
 
               console.log("⏳ Waiting 20 sec...");
 
@@ -129,14 +109,32 @@ async function generatePools() {
               continue;
             }
 
-            // 🚀 DUPLICATE FILTER
-            const existing = new Set(bank.questions.map((q) => q.question));
-
-            const unique = newQuestions.filter(
-              (q) => q.question && !existing.has(q.question),
+            // 🚀 EXISTING QUESTIONS
+            const existingQuestions = new Set(
+              bank.questions.map((q) => q.question?.trim()),
             );
 
-            // 🚀 APPEND
+            // 🚀 FILTER VALID + UNIQUE
+            const unique = newQuestions.filter((q) => {
+              if (!q || !q.question || !q.correctAnswer) {
+                return false;
+              }
+
+              return !existingQuestions.has(q.question.trim());
+            });
+
+            // 🚀 SAFETY
+            if (unique.length === 0) {
+              console.log("⚠️ No unique questions");
+
+              console.log("⏳ Waiting 15 sec...");
+
+              await sleep(15000);
+
+              continue;
+            }
+
+            // 🚀 APPEND ONLY
             bank.questions.push(...unique);
 
             // 🚀 SAVE
