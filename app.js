@@ -10,6 +10,8 @@ import syllabusRoutes from "./routes/syllabus.js";
 import errorHandler from "./middleware/errorHandler.js";
 import paymentRoutes from "./routes/payment.js";
 import leaderboardRoutes from "./routes/leaderboard.js";
+import exportRoutes from "./routes/exportRoutes.js";
+import studyNotesRoutes from "./routes/studyNotesRoutes.js";
 
 const app = express();
 
@@ -22,9 +24,11 @@ app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api", exportRoutes);
 app.use("/api/syllabus", syllabusRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
+app.use("/api/study-notes", studyNotesRoutes);
 app.use(errorHandler);
 
 export default app;

@@ -15,4 +15,9 @@ router.get(
   getDashboard,
 );
 
+router.get("/export-bookcontent", async (req, res) => {
+  const data = await BookContent.find({});
+  res.json(data);
+});
+
 export default router;

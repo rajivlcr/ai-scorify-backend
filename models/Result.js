@@ -6,12 +6,23 @@ const resultSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+
     subject: String,
+
     chapter: String,
+
     score: Number,
+
     total: Number,
+
+    accuracy: {
+      type: Number,
+      default: 0,
+    },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+  },
 );
 
 export default mongoose.model("Result", resultSchema);

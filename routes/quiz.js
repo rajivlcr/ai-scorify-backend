@@ -1,31 +1,22 @@
 import express from "express";
 
-import { generateQuiz, submitQuiz } from "../controllers/quizController.js";
+import {
+  generateQuiz,
+  generateRevisionQuiz,
+  submitQuiz,
+} from "../controllers/quizController.js";
 
-import auth from "../middleware/auth.js";
-
-import { checkQuizLimit } from "../middleware/checkPlan.js";
+import optionalAuth from "../middleware/optionalAuth.js";
 
 const router = express.Router();
 
-/*
-|--------------------------------------------------------------------------
-| GUEST ROUTES
-|--------------------------------------------------------------------------
-*/
+// 🚀 NORMAL QUIZ
+router.post("/generate", optionalAuth, generateQuiz);
 
-// Guest users can generate MCQ quizzes
-router.post("/generate", generateQuiz);
+// 🚀 REVISION QUIZ
+router.get("/revision", optionalAuth, generateRevisionQuiz);
 
-// Guest users can submit quizzes
-router.post("/submit", submitQuiz);
-
-/*
-|--------------------------------------------------------------------------
-| LOGGED IN USER ROUTES
-|--------------------------------------------------------------------------
-*/
-
-// Keep future authenticated routes here
+// 🚀 SUBMIT QUIZ
+router.post("/submit", optionalAuth, submitQuiz);
 
 export default router;

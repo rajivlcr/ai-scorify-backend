@@ -1,8 +1,6 @@
 import User from "../models/User.js";
-
 import Result from "../models/Result.js";
-
-import QuestionBank from "../models/QuestionBank.js";
+import QuestionBankV2 from "../models/QuestionBankV2.js";
 
 // 🚀 DASHBOARD STATS
 export const getStats = async (req, res) => {
@@ -17,14 +15,30 @@ export const getStats = async (req, res) => {
 
     const totalRevenue = proUsers * 199;
 
+    const questionBanks = await QuestionBankV2.countDocuments();
+
+    const questionStats = await QuestionBankV2.aggregate([
+      {
+        $project: {
+          count: {
+            $size: "$questions",
+          },
+        },
+      },
+    ]);
+
+    const totalQuestions = questionStats.reduce(
+      (sum, item) => sum + item.count,
+      0,
+    );
+
     res.json({
       totalUsers,
-
       proUsers,
-
       totalQuizzes,
-
       totalRevenue,
+      questionBanks,
+      totalQuestions,
     });
   } catch (err) {
     console.log(err);
@@ -39,11 +53,9 @@ export const getStats = async (req, res) => {
 export const getUsers = async (req, res) => {
   try {
     const users = await User.find()
-
       .sort({
         createdAt: -1,
       })
-
       .select("-password");
 
     res.json(users);
@@ -83,7 +95,6 @@ export const updatePlan = async (req, res) => {
 
     res.json({
       msg: "Plan updated",
-
       user,
     });
   } catch (err) {
@@ -106,24 +117,20 @@ export const deleteUser = async (req, res) => {
       });
     }
 
-    // 🚀 PREVENT SELF DELETE
     if (user.role === "admin") {
       return res.status(400).json({
         msg: "Admin cannot be deleted",
       });
     }
 
-    // 🚀 DELETE RESULTS
     await Result.deleteMany({
       userId: user._id,
     });
 
-    // 🚀 DELETE USER
     await User.findByIdAndDelete(user._id);
 
     res.json({
       success: true,
-
       msg: "User deleted",
     });
   } catch (err) {
@@ -131,6 +138,53 @@ export const deleteUser = async (req, res) => {
 
     res.status(500).json({
       msg: "Delete failed",
+    });
+  }
+};
+
+export const getQuestionBanks = async (req, res) => {
+  try {
+    const banks = await QuestionBankV2.find();
+
+    const formatted = banks.map((bank) => ({
+      _id: bank._id,
+      className: bank.className,
+      subject: bank.subject,
+      chapter: bank.chapter,
+      totalQuestions: bank.questions.length,
+
+      mcqCount: bank.questions.filter((q) => q.type === "mcq").length,
+
+      assertionCount: bank.questions.filter((q) => q.type === "assertion")
+        .length,
+    }));
+
+    res.json(formatted);
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Failed to load question banks",
+    });
+  }
+};
+
+export const getQuestionBank = async (req, res) => {
+  try {
+    const bank = await QuestionBankV2.findById(req.params.id);
+
+    if (!bank) {
+      return res.status(404).json({
+        msg: "Question bank not found",
+      });
+    }
+
+    res.json(bank);
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Failed to load question bank",
     });
   }
 };

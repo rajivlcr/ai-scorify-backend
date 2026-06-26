@@ -65,6 +65,12 @@ const userSchema = new mongoose.Schema(
       type: Date,
     },
 
+    // 🚀 FREE PLAN CHAPTER ACCESS
+    unlockedChapters: {
+      type: [String],
+      default: [],
+    },
+
     // 🚀 STREAK SYSTEM
     streak: {
       type: Number,

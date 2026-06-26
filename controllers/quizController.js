@@ -1,24 +1,42 @@
 // 📁 backend/controllers/quizController.js
 
-import QuestionBank from "../models/QuestionBank.js";
+import QuestionBankV2 from "../models/QuestionBankV2.js";
 import Result from "../models/Result.js";
 import BookContent from "../models/BookContent.js";
 import User from "../models/User.js";
+import UserWeakArea from "../models/UserWeakArea.js";
 
 // 🚀 NORMALIZE
 const normalize = (text) =>
   text?.toLowerCase()?.trim()?.replace("mathematics", "maths");
 
-// 🚀 GENERATE QUIZ
+// 🚀 GENERATE NORMAL QUIZ
 export const generateQuiz = async (req, res) => {
   const { className, subject, chapter, type } = req.body;
 
   try {
     const normalizedSubject = normalize(subject);
-
     const normalizedChapter = normalize(chapter);
 
-    // 🚀 LOGGED-IN FREE PLAN CHECK
+    // 🚀 FREE USER CHAPTER LIMIT
+    if (req.user && req.user.plan === "free") {
+      const alreadyUnlocked =
+        req.user.unlockedChapters?.includes(normalizedChapter);
+
+      if (!alreadyUnlocked && req.user.unlockedChapters.length >= 5) {
+        return res.status(403).json({
+          premiumRequired: true,
+          msg: "Free plan includes access to 5 chapters only. Upgrade to Pro.",
+        });
+      }
+
+      if (!alreadyUnlocked) {
+        req.user.unlockedChapters.push(normalizedChapter);
+        await req.user.save();
+      }
+    }
+
+    // 🚀 FREE USERS ONLY MCQ
     if (req.user && req.user.plan === "free" && type !== "mcq") {
       return res.status(403).json({
         premiumRequired: true,
@@ -26,7 +44,7 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 GUESTS CAN ONLY ACCESS MCQ
+    // 🚀 GUESTS ONLY MCQ
     if (!req.user && type !== "mcq") {
       return res.status(403).json({
         premiumRequired: true,
@@ -34,7 +52,6 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 CHECK CHAPTER EXISTS
     const chapterData = await BookContent.findOne({
       className,
       subject: normalizedSubject,
@@ -47,28 +64,69 @@ export const generateQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 FETCH QUESTION POOL
-    const data = await QuestionBank.findOne({
+    const data = await QuestionBankV2.findOne({
       className,
       subject: normalizedSubject,
       chapter: normalizedChapter,
-      type,
     });
 
-    if (!data || !data.questions || data.questions.length === 0) {
+    if (!data || !data.questions?.length) {
       return res.status(404).json({
         msg: "Question pool not available",
       });
     }
 
-    // 🚀 RANDOMIZE
-    const shuffled = [...data.questions].sort(() => 0.5 - Math.random());
+    const pool = data.questions.filter((q) => q.type === type);
 
-    // 🚀 LIMIT
-    const limit = type === "mcq" ? 15 : type === "assertion" ? 10 : 2;
+    if (!pool.length) {
+      return res.status(404).json({
+        msg: `${type} questions not available`,
+      });
+    }
+
+    let selectedQuestions = [];
+
+    if (type === "mcq") {
+      const concept = pool
+        .filter((q) => q.category === "concept")
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+      const application = pool
+        .filter((q) => q.category === "application")
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+      const competency = pool
+        .filter((q) => q.category === "competency")
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+      const hots = pool
+        .filter((q) => q.category === "hots")
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+      const numerical = pool
+        .filter((q) => q.category === "numerical")
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+
+      selectedQuestions = [
+        ...concept,
+        ...application,
+        ...competency,
+        ...hots,
+        ...numerical,
+      ];
+    } else {
+      selectedQuestions = pool.sort(() => Math.random() - 0.5).slice(0, 10);
+    }
+
+    selectedQuestions = selectedQuestions.sort(() => Math.random() - 0.5);
 
     res.json({
-      questions: shuffled.slice(0, limit),
+      questions: selectedQuestions,
       cached: true,
     });
   } catch (err) {
@@ -80,12 +138,77 @@ export const generateQuiz = async (req, res) => {
   }
 };
 
+// 🚀 REVISION QUIZ
+export const generateRevisionQuiz = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        msg: "Login required",
+      });
+    }
+
+    const weakAreas = await UserWeakArea.find({
+      userId: req.user._id,
+    })
+      .sort({ wrongCount: -1 })
+      .limit(10);
+
+    if (!weakAreas.length) {
+      return res.status(404).json({
+        msg: "No weak areas found yet",
+      });
+    }
+
+    const questions = [];
+
+    for (const area of weakAreas) {
+      const bank = await QuestionBankV2.findOne({
+        subject: area.subject,
+        chapter: area.chapter,
+      });
+
+      if (!bank) continue;
+
+      const matchingQuestions = bank.questions.filter(
+        (q) =>
+          q.type === "mcq" &&
+          (q.learningObjective === area.learningObjective ||
+            q.category === area.category),
+      );
+
+      questions.push(
+        ...matchingQuestions.sort(() => Math.random() - 0.5).slice(0, 2),
+      );
+    }
+
+    const finalQuestions = questions
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 10);
+
+    if (!finalQuestions.length) {
+      return res.status(404).json({
+        msg: "Revision questions unavailable",
+      });
+    }
+
+    res.json({
+      revision: true,
+      questions: finalQuestions,
+    });
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      msg: "Revision quiz failed",
+    });
+  }
+};
+
 // 🚀 SUBMIT QUIZ
 export const submitQuiz = async (req, res) => {
   try {
     const { userId, subject, chapter, quiz = [], answers = [] } = req.body;
 
-    // 🚀 VALIDATION
     if (!quiz.length || !answers.length) {
       return res.status(400).json({
         msg: "Quiz data missing",
@@ -96,14 +219,16 @@ export const submitQuiz = async (req, res) => {
 
     let score = 0;
 
-    // 🚀 SCORE
+    const wrongQuestions = [];
+
     quiz.forEach((q, i) => {
       if (answers[i] === q.correctAnswer) {
         score++;
+      } else {
+        wrongQuestions.push(q);
       }
     });
 
-    // 🚀 GUEST USER
     if (isGuest) {
       return res.json({
         score,
@@ -115,16 +240,40 @@ export const submitQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 SAVE RESULT
+    const accuracy = Math.round((score / quiz.length) * 100);
+
     await Result.create({
       userId,
       subject: normalize(subject),
       chapter: normalize(chapter),
       score,
       total: quiz.length,
+      accuracy,
     });
 
-    // 🚀 USER
+    for (const q of wrongQuestions) {
+      await UserWeakArea.findOneAndUpdate(
+        {
+          userId,
+          chapter: normalize(chapter),
+          learningObjective: q.learningObjective || "",
+        },
+        {
+          $inc: {
+            wrongCount: 1,
+          },
+          $set: {
+            subject: normalize(subject),
+            category: q.category || "concept",
+          },
+        },
+        {
+          upsert: true,
+          returnDocument: "after",
+        },
+      );
+    }
+
     const user = await User.findById(userId);
 
     if (!user) {
@@ -133,10 +282,7 @@ export const submitQuiz = async (req, res) => {
       });
     }
 
-    // 🚀 XP
     let earnedXP = 10;
-
-    const accuracy = (score / quiz.length) * 100;
 
     if (accuracy >= 80) {
       earnedXP += 5;
@@ -144,7 +290,6 @@ export const submitQuiz = async (req, res) => {
 
     user.xp += earnedXP;
 
-    // 🚀 STREAK
     const today = new Date();
 
     const lastActive = user.lastActiveDate
@@ -167,7 +312,6 @@ export const submitQuiz = async (req, res) => {
 
     await user.save();
 
-    // 🚀 RESPONSE
     res.json({
       score,
       total: quiz.length,
